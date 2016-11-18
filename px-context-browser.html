@@ -101,10 +101,10 @@ Custom property | Description | Default
     <div id="modal" on-click="toggleColumnBrowser" class$="{{isItemHidden(showColumnBrowser)}}"></div>
     <div id="back">
       <div class="column-browser-container flex flex--col">
-        <header class="flex u-pl" id="selectContext">
-          <div class="content-wrapper">
-            <div class="content-wrapper__item">
-              <content></content>
+        <header class="flex u-pl u-pr" id="selectContext">
+          <div class="content-wrapper flex__item--middle">
+            <div class="epsilon content-wrapper__item flex__item--middle u-mb0">
+              <content select=":not(.right)"></content>
             </div>
           </div>
           <div class="flex__item--middle">
@@ -113,6 +113,10 @@ Custom property | Description | Default
               <iron-icon icon="fa:fa-caret-down"></iron-icon>
             </h1>
             <span>{{selectedItemParent}}</span>
+          </div>
+          <div class="flex__item--middle flex__item"></div>
+          <div class="action-wrapper flex__item--middle">
+            <content select=".right"></content>
           </div>
         </header>
         <div id="ruler" class$="{{isItemHidden(showColumnBrowser)}} flex flex--col">
