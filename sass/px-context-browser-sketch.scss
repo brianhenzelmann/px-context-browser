@@ -237,6 +237,10 @@ header {
     height: 100%;
 }
 
+.action-wrapper {
+  z-index: 0;
+}
+
 .content-wrapper__item{
   margin-bottom: $inuit-base-spacing-unit - calculateRem(1px);
 }
