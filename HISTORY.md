@@ -1,3 +1,115 @@
+v1.6.11
+==================
+* merge PR #39 - Add an onRejected promise handler for to getChildren
+
+v1.6.10
+==================
+* fix #37 regarding labels in breadcrumb
+
+v1.6.9
+==================
+* merge PR #36 - allow selectedAsset to have children.
+
+v1.6.8
+==================
+* merge PR #35
+
+v1.6.7
+==================
+* fix unit tests for typeahead
+
+v1.6.6
+==================
+* changed 'search' to 'filter' in typeahead
+
+v1.6.5
+==================
+* fixed memory leak, causing using setinterval.
+* re-wrote some functions for readability
+* added lots of documentation.
+
+v1.6.4
+==================
+* increased context browser from 2 to 5
+* created css variable --px-cb-background-z-index
+* created css variable --px-cb-spinner-z-index
+
+v1.6.3
+==================
+* put in cloudflare cache cleaner
+
+v1.6.2
+==================
+* put in new demo
+
+v1.6.1
+==================
+* Update colors design to pick up new colors
+
+v1.6.0
+==================
+* merge PR #32, allow CB to be disabled
+
+v1.5.3
+==================
+* merge PR that fixed typeahead bug
+
+v1.5.2
+==================
+* changing ghp.sh to account for Alpha releases
+
+v1.5.1
+==================
+* fixed win8.1 ie11 test bug.
+
+v1.5.0
+==================
+* add search per column (filter) capability
+
+v1.4.5
+==================
+* fixed bug that removed the scrollbars
+
+v1.4.4
+==================
+* rebuild sass for headings design update
+
+v1.4.3
+==================
+* added an extra visuallyhidden class to ensure the selected context browser item doesn't show up when open is clicked.
+
+v1.4.2
+==================
+* removed content-wrapper__item class
+
+v1.4.1
+==================
+* Update missed design depndencies
+
+v1.4.0
+==================
+* Updated dependencies
+
+v1.3.17
+==================
+* changing browser in wct testing from safari 8 to safari 10 on elcapitan
+
+v1.3.16
+==================
+* updating slider dependency
+
+v1.3.15
+==================
+* changing all devDeps to ^
+
+v1.3.14
+==================
+* Update px-theme to 2.0.1 and update test fixtures
+
+v1.3.13
+==================
+* update dependencies for dropdown
+
 v1.3.12
 ==================
 * changed i to iron-icon

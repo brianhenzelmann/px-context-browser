@@ -26,8 +26,8 @@
         },
         {
           "browserName": "safari",
-          "platform": "OS X 10.10",
-          "version": "8"
+          "platform": "OS X 10.11",
+          "version": "10"
         },
         {
           "browserName": "firefox",
@@ -37,6 +37,7 @@
     }
   },
   "suites": [
-    "test/px-context-browser-test-fixture.html"
+    "test/px-context-browser-test-fixture.html",
+    "test/px-context-browser-typeahead-test-fixture.html"
   ]
 }

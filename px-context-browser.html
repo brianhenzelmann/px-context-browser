@@ -7,6 +7,8 @@
 <link rel="import" href="../polymer/polymer.html"/>
 <link rel="import" href="../px-spinner/px-spinner.html"/>
 <link rel="import" href="../px-polymer-font-awesome/polymer-font-awesome.html" />
+<link rel="import" href="px-context-browser-typeahead.html" />
+<link rel="import" href="../iron-resizable-behavior/iron-resizable-behavior.html">
 <style>
   [dir=rtl] .fa.px-context-browser {
     -webkit-transform: scale(-1, 1);
@@ -69,6 +71,7 @@ The following custom properties are available for styling:
 
 Custom property | Description | Default
 ----------------|-------------|----------
+`--px-cb-background-z-index` | The z-index for the context browser | `5`
 `--px-cb-background-color` | Background color for the header and panel | `$white`
 `--px-cb-modal-color` | Color to be used (with transparency) for the modal overlay | `$black`
 `--px-cb-scrollbar-track-color` | Color of the scrollbar track (background) | `$gray2`
@@ -77,6 +80,7 @@ Custom property | Description | Default
 `--px-cb-background-color--selected` | Background color of the primary selected node | `$select-blue-default`
 `--px-cb-text-color--selected` | Text color of the primary selected node and OPEN button text/border | `$white`
 `--px-cb-background-color---secondary` | Background color of the primary selected node's parents and grandparents | `$gray2`
+`--px-cb-spinner-z-index` | The z-index for the spinner embedded in the context browser | `10`
 
 
 @element px-context-browser
@@ -109,10 +113,10 @@ Custom property | Description | Default
           </div>
           <div class="flex__item--middle">
             <h1 class="epsilon caps weight--normal u-m0" on-click="toggleColumnBrowser">
-              <span>{{openedItemName}}</span>
-              <iron-icon icon="fa:fa-caret-down"></iron-icon>
+              <span class$="context-browser-disabled-{{disabled}}">{{openedItemName}}</span>
+              <iron-icon icon="fa:fa-caret-down" hidden$="{{disabled}}"></iron-icon>
             </h1>
-            <span>{{selectedItemParent}}</span>
+            <span class$="context-browser-disabled-{{disabled}}">{{selectedItemParent}}</span>
           </div>
           <div class="flex__item--middle flex__item"></div>
           <div class="action-wrapper flex__item--middle">
@@ -124,21 +128,32 @@ Custom property | Description | Default
             <ul class="breadcrumbs list-inline list-inline--delimited u-pv-">
               <template is="dom-repeat" id="breadcrumbs" items="{{parentNodes}}">
                 <li class$="u-pv--">
-                  <span class="breadcrumb" on-click="handleBreadcrumbClick">{{item.name}}</span>
+                  <span class="breadcrumb" on-click="handleBreadcrumbClick">{{_getItemLabel(item)}}</span>
                 </li>
               </template>
             </ul>
             <div class="flex flex--col column-browser" id="columnBrowser">
               <px-spinner finished></px-spinner>
-              <div class="flex">
+              <div class$="{{_redrawColumns(resize)}}">
                 <template is="dom-repeat" id="levels" items="{{parentNodes}}">
                   <div class="flex flex--col column push" data-column>
                     <div class="head">{{item.header}}</div>
-                    <div class="flex__item scroll-y" on-scroll="scrollEndHandler">
+                    <div class$="{{isItemHidden(showColumnBrowser)}} flex__item scroll-y" on-scroll="scrollEndHandler">
+                    <template is="dom-if" if="[[showColumnTypeahead]]">
+                      <px-context-browser-typeahead class="search-box-component" items="{{item.children}}"></px-context-browser-typeahead>
+                    </template>
                       <ul class$="{{UlSelected(item, selectedItem)}} list-bare level">
                         <template is="dom-repeat" id="level" items="{{item.children}}">
                           <li on-click="itemClickHandler" id$="[[getItemId(item)]]" class$="{{isItemSelected(item, selectedItem)}} flex flex--middle selectable-item" >
-                            <span class="flex__item item-label">{{getItemLabel(item)}}</span>
+                            <template is="dom-if" if="[[!showColumnTypeahead]]"><span class="flex__item item-label">{{_getItemLabel(item)}}</span></template>
+                            <template is="dom-if" if="[[showColumnTypeahead]]">
+                              <template is="dom-if" if="[[!item.searchTerm]]">
+                                <span class="flex__item item-label">{{_getItemLabel(item)}}</span>
+                              </template>
+                              <template is="dom-if" if="{{item.searchTerm}}">
+                                <span class="flex__item item-label">{{item.currentSearchLabel.prefix}}<span class="bold">{{item.currentSearchLabel.highlight}}</span>{{item.currentSearchLabel.suffix}}</span>
+                              </template>
+                            </template>
                             <button class$="[[getItemOpenerClass(item)]] opener btn btn--small btn--tertiary" on-click="openClickHandler" key$="[[getItemId(item)]]">Open
                             </button>
                             <template is="dom-if" if="{{_hasChildren(item, showChevron)}}">
@@ -315,7 +330,39 @@ Custom property | Description | Default
           type: Boolean,
           value: false,
           notify: true
+        },
+        /**
+         * This attributes allows you to enable the search box When this attribute is true
+         * @type {Boolean Optional}
+         *
+         * @default "false"
+         *
+         */
+        showColumnTypeahead: {
+          type: Boolean,
+          value: false,
+          notify: true
+        },
+        /**
+         * This attributes allows you to disable the context browser
+         * @type {Boolean Optional}
+         *
+         * @default "false"
+         *
+         */
+        disabled: {
+          type: Boolean,
+          value: false
+        },
+        resize: {
+          value: false,
+          type: Boolean,
+          notify: true
         }
+      },
+      behaviors: [Polymer.IronResizableBehavior],
+      listeners: {
+        'iron-resize': '_calculateColumnClasses'
       },
       ready: function() {
         var _this = this;
@@ -331,45 +378,78 @@ Custom property | Description | Default
             }
           }
         }, 0);
-
-        // Need to watch the width of the column-browser.
-        var columnBrowser = this.$.columnBrowser,
-            columnBrowserColumnRuler = Polymer.dom(columnBrowser).querySelector('.ruler'),
+      },
+      /**
+      * counts the number of generated divs inside the column browser by filtering out anything that's not a div tag.
+      *
+      * @method _getNumberOfColumns
+      */
+      _getNumberOfColumns: function() {
+         var columnBrowser = this.$.columnBrowser,
+            columnBrowserColumnRuler = Polymer.dom(this).querySelector('.ruler'),
             columnBrowserColumns = Polymer.dom(columnBrowser).querySelector('div:first-of-type'),
-            columnBrowserColumnsBaseCss = columnBrowserColumns.className, // Polymer does weird stuff.
-            $columnBrowserColumns = Polymer.dom(columnBrowserColumns),
-            contextBrowserWidth, contextBrowserChildrenCount;
+            $columnBrowserColumns = Polymer.dom(columnBrowserColumns);
 
-        // Watch the container size change.
-        var getColumns = function() {
-          return $columnBrowserColumns.childNodes.filter(
-            function(n) {
-              return n.tagName === 'DIV';
-            });
-        };
+        return $columnBrowserColumns.childNodes.filter(
+          function(n) {
+            return n.tagName === 'DIV';
+          })
+          .length;
+      },
+      /**
+      *
+      * this method debounces the iron-resize event, caused by a window resize, flips the value of the resize property, causing Polymer to
+      * to re-calculate the class list for the columns.
+      * @method _resizeEvent
+      */
+      _calculateColumnClasses: function() {
+      this.debounce('cbDraw', function() {
+       this.set('resize', !this.resize);
+      },20);
+      },
+      /**
+      * This method find out how many columns have data in them, and returns a string pf CSS classes
+      * that have two classes in them:
+      * 1. columns-# this represents the number of possible columns in the space allocated to the CB. this is
+      * not the actual number of columns.
+      * 2. column-index-# - this is the index on the columns css "array" which shows the column that should be highlighted
+      * anything column number BELOW the number that is passed will be hidden.
+      * @method _columnIndexClasses
+      * @return {String} the CSS classes for the first div in each column
+      */
+      _redrawColumns: function() {
+        var columnBrowser = this.$.columnBrowser,
+            minimumColumnSizeRuler = Polymer.dom(columnBrowser).querySelector('.ruler'),
+            columnListContainer = Polymer.dom(columnBrowser).querySelector('div:first-of-type'),
+            columnBrowserWidth = columnBrowser.offsetWidth,
+            baseCss = "flex",
+            numOfPossibleColumns,
+            //get the number of columns, counting the number of divs, skipping everything else.
+            numOfColumns = this._getNumberOfColumns();
 
-        setInterval(
-          function() {
-            var width = columnBrowser.offsetWidth,
-                removedCount = $columnBrowserColumns.querySelectorAll('.removed').length,
-                cCount = columnBrowserColumns.childNodes.length - removedCount;
 
-            if (width !== contextBrowserWidth || cCount !== contextBrowserChildrenCount) {
-              contextBrowserWidth = width;
-              contextBrowserChildrenCount = cCount;
-              var count = getColumns().length - removedCount,
-                  columns = Math.floor(width / columnBrowserColumnRuler.offsetWidth),
-                  desiredClass = columnBrowserColumnsBaseCss + ' columns-' + columns;
-
-              if (count > columns) {
-                desiredClass += " column-index-" + (count - columns);
-              }
-
-              if (columnBrowserColumns.className !== desiredClass) {
-                columnBrowserColumns.className = desiredClass;
-              }
+            //we wanna make sure there's an actual size on the column browser
+            if (columnBrowserWidth && minimumColumnSizeRuler.offsetWidth) {
+              // this calculates the number of possible columns available in the column browser based on its width.
+              numOfPossibleColumns = Math.floor(columnBrowserWidth / minimumColumnSizeRuler.offsetWidth);
+            } else {
+              //our width is zero, so no room for columns
+              numOfPossibleColumns = 0;
             }
-          }, 1000 / 20); // ms/fps
+
+          //set the number of possible columns
+          baseCss += ' columns-' + numOfPossibleColumns;
+
+          //if there are more columns then the available space, we want to hide the ones all the way to the left.
+          // this is achieved by specifying the index - the column that has the selected item - any number that is smaller than the
+          // index number is hidden.
+          if  (numOfColumns > numOfPossibleColumns){
+            baseCss += " column-index-" + (numOfColumns - numOfPossibleColumns);
+          }
+          return baseCss;
+      },
+      detached: function () {
+        this.unlisten(document, 'force-re-render', 'reRenderDom'); //remove the listener for re rendering
       },
       /**
        * Event listener on breadcrumb clicks, listener is registered from the template
@@ -391,6 +471,7 @@ Custom property | Description | Default
       itemClickHandler: function(evt) {
         this.debounce('itemClick', function() {
           this.selectItem(evt.model.item, evt.currentTarget);
+
         }, 1);
       },
 
@@ -403,7 +484,7 @@ Custom property | Description | Default
       scrollEndHandler: function(evt) {
         this.debounce(
           'scroll-panel', function() {
-            // executes when it hasn't been called for 500ms
+            // executes when it hasn't been called for 200ms
             var _this = this,
                 levelIdx = this.$.levels.indexForElement(evt.target),
                 scrollableHeight = evt.target.scrollHeight,
@@ -466,8 +547,8 @@ Custom property | Description | Default
             len=this.parentNodes.length;
         this.openedBreadcrumbs = [];
         for (i=0; i<len;i++) {
-          if (this.getItemLabel(this.parentNodes[i])) {
-            this.push('openedBreadcrumbs', this.getItemLabel(this.parentNodes[i]));
+          if (this._getItemLabel(this.parentNodes[i])) {
+            this.push('openedBreadcrumbs', this._getItemLabel(this.parentNodes[i]));
           }
         }
         //set the selected item's parent for the sudo breadcrumb right below the selected item.
@@ -478,7 +559,7 @@ Custom property | Description | Default
        * @return {String} Display label for given item
        * @private
        */
-      getItemLabel: function(item) {
+      _getItemLabel: function(item) {
         return item ? item[this.labelField] || '' : '';
       },
       /**
@@ -514,7 +595,11 @@ Custom property | Description | Default
        * @private
        */
       isItemHidden: function(item) {
-          return (!item) ? "visuallyhidden" : '';
+          if (this.disabled) {
+              return  'visuallyhidden';
+          } else {
+            return (!item) ? "visuallyhidden" : '';
+          }
       },
       /**
        * this method checks whether the attribute hasChildren has been set to true, and if it has,
@@ -533,40 +618,58 @@ Custom property | Description | Default
       contextChanged: function() {
         var _this= this,
             browserContext = this.browserContext,
-            root;
+            root= {};
 
-        root = {hideBreadcrumb: true};
-        this.parentNodes = [];
-        this.openedBreadcrumbs = [];
+        //initialize/empty out the parentNodes array
+        this.set('parentNodes',[]);
+
+        //initialize/empty out the openedBreadcrumbs array
+        this.set('openedBreadcrumbs',[]);
 
         this.push('parentNodes', root);
+
+        //add the passed in browser context into root - which was just added into parentNodes
         this.addChildren(root, browserContext);
 
+        // we want to recursively keep adding children, until we find the selectedAsset
         //dig into the tree, and keep going while we have children
-        function recursiveAddChildren(currentRoot) {
-          var current_elem;
-          for (var i in currentRoot) {
-            if (currentRoot.hasOwnProperty(i)) {
-              current_elem = currentRoot[i];
-              if(Object.keys(current_elem).indexOf('children') > -1 ) {
-                if (current_elem.inSelectedPath) {
-                  _this.push('parentNodes',current_elem);
-                }
-                if (current_elem.selectedAsset) {
-                    _this.addParents(current_elem);
-                    _this.set('selectedItem',current_elem);
-                }
-                var obj = {"data" : current_elem.children};
-                _this.addChildren(current_elem, obj);
-                recursiveAddChildren(current_elem.children);
-              } else if (current_elem.selectedAsset) {
-                _this.addParents(current_elem);
-                _this.set('selectedItem',current_elem);
+        function recursiveAddChildren(childList) {
+          var currentChild;
+          var selectedAssetFound = false;
+          for (var i=0;i< childList.length;i++) {
+            currentChild = childList[i];
+            //first, we check if the item we're on is the selectedAsset
+            if (currentChild.selectedAsset) {
+              //if it is, find the parents and add them into parentNodes
+              _this.addParents(currentChild);
+              //and set the selectableItem
+              _this.set('selectedItem',currentChild);
+              // we make sure to set this to true, so when we loop around again, we know that we've found
+              //the selectedAsset
+              selectedAssetFound = true;
+              // this continue prevents children of the selected asset to be added properly. Clicking on a child
+				// results in a javascript error.
+              // continue;
+            }
+            //in case the currentChild we're on has children, as add them, and recuresively call ourselves.
+            if(Object.keys(currentChild).indexOf('children') > -1 ) {
+              var obj = {"data" : currentChild.children};
+              _this.addChildren(currentChild, obj);
+              if (!selectedAssetFound) { //only call ourselves again if we haven't found the selectedAsset
+                recursiveAddChildren(currentChild.children);
               }
             }
           }
         }
+        //initial call to recuresive function. children were added to root in the addChildren function call above.
         recursiveAddChildren(root.children);
+
+        // Send an event to typeahead when data is updated through browser context
+        if (_this.parentNodes && _this.parentNodes.length > 0) {
+            this.fire('px-browser-context-updated', {
+                items: _this.parentNodes[0].children
+            });
+        }
         // Repopulate the openedItemName and Breadcrumbs if we have a directContext
         if (this.selectedItem && this.selectedItem.name) {
           this.configureBreadcrumbs();
@@ -575,22 +678,33 @@ Custom property | Description | Default
       },
      /**
       * Add parents to the parentNodes array so that the breadcrumbs will have the correct path
+      * and the columns can be drawn correctly.
+      * We keep looping through our while going UP the path, adding items and adding a inSelectedPath property to the item,
+      * until the current item has no parent - which means we are at the top of the path.
+      * At that point, we push all the items from parentArray into the gloval parentNodes - we recurse backwards - since the last item added
+      * to the parentArray is the top most one.
       *
       * @param {Object} item The selected item (with selectedAsset to true)
       */
       addParents: function(item) {
-        var array = [];
-        var parent = item;
+        var parentArray = [],
+            parent = item;
+
 
         while (parent) {
+          //we set this property and later check for it to display the gray lines, showing the item is in the path.
           parent.inSelectedPath = true;
-          if (parent.parent) {
-            array.push(parent);
+          if (parent.parent) { //does our item have a parent?
+            parentArray.push(parent); //if it does, we add it to the parentArray
           }
+          // if the item has a parent, it'll be passed back into the while loop. If it doesn't,
+          // it'll be undefined, which will break out of the while loop.
           parent = parent.parent;
         }
-        for (var i = array.length - 1; i >= 0; i--) {
-          this.push('parentNodes',array[i]);
+
+        //we've found the full path, now let's add it to parentNodes
+        for (var i = parentArray.length - 1; i >= 0; i--) {
+          this.push('parentNodes', parentArray[i]);
         }
       },
       /**
@@ -629,14 +743,26 @@ Custom property | Description | Default
         if (results === undefined || results === null) {
           return;
         }
-        var children = results.data || [];
-        // set up the parent pointers
-        for (var i = 0; i < children.length; i++) {
+        var children = results.data || [],
+            modifiedChildren = this._assignParentNodeToChildren(parentNode, children);
+
+        //assign the modified children as a children property on the parentNode
+        parentNode.children = modifiedChildren;
+        //and assign the meta property as well.
+        parentNode.meta = results.meta;
+      },
+      /**
+      * this method adds the parent property to each child, creating a circular json
+      * object in the process. This is used later on find the parent of the item.
+      * @method _assignParentNodeToChildren
+      */
+      _assignParentNodeToChildren: function(parentNode, children) {
+        // set up the parent pointers - this creates a circular json object.
+        // this is used later on find the parent of the item.
+        for (var i = 0, len = children.length; i < len; i++) {
           children[i].parent = parentNode;
         }
-
-        parentNode.children = children;
-        parentNode.meta = results.meta;
+        return children;
       },
       /**
        * Drops all children of a given item;
@@ -672,7 +798,7 @@ Custom property | Description | Default
       /**
        * turns the spinner on or off when promises are requested.
        *
-       * @param {String} state
+       * @param {String} state of the spinner -  'show' | 'hide'
        * @private
        */
       spinner: function(state) {
@@ -688,17 +814,20 @@ Custom property | Description | Default
         }
       },
       /**
-       * Fetches all children of a given item
+       * Fetches all children of a given item/parentNode
        *
        * @param {Object} item
        * @private
        */
-      getNewChildren: function(item) {
+      getNewChildren: function(parentNode) {
         this.spinner('show');
+        //first, let's make we have a getChildren function
         if (this.handlers.getChildren) {
           var _this = this;
-          this.handlers.getChildren(item).then(
+          //call the getChildren function, which expects a promise in return.
+          this.handlers.getChildren(parentNode).then(
             function(data) {
+              //we got the data, let's hide the spinner
               _this.spinner('hide');
               var children = data.data,
                   parentId = data.meta.parentId,
@@ -709,12 +838,21 @@ Custom property | Description | Default
               }
               //check response is for the current selected node
               else if (parentId === selectedNode[_this.idField]) {
-                _this.addChildren(item, data);
-                _this.addToParentNodes(item);
+                // first we add the children into the parentNode
+                _this.addChildren(parentNode, data);
+                // next, we add the parentNode itself to the parentNodes array.
+                _this.addToParentNodes(parentNode);
+                // and we wanna wait to make sure this calculation includes the new item we just added.
+                _this.async(_this._calculateColumnClasses, 1);
               } else {
                 // disregard response, it's from an old getChildren call
               }
-          });
+            },
+            function(error) {
+              _this.spinner('hide');
+              console.warn('Context tree getChildren failed');
+            }
+          );
         }
       },
 
@@ -829,11 +967,29 @@ Custom property | Description | Default
       * @method toggleColumnBrowser
       */
        toggleColumnBrowser: function() {
-        this.showColumnBrowser = !this.showColumnBrowser;
+        if (this.disabled) {
+          this.showColumnBrowser = false;
+        } else {
+          this.showColumnBrowser = !this.showColumnBrowser;
+        }
+        this._calculateColumnClasses();
+        //this.showColumnBrowser = !this.showColumnBrowser;
 
         //fire an opening or closing event
         this.fire((this.showColumnBrowser) ? 'contextBrowserOpening' : 'contextBrowserClosing');
         this.spinner('hide');
+      },
+      /**
+       * Called whenever the data is changed for context browser from typeahead
+       * @private
+       * @event force-re-render
+       * @param {event} e
+       */
+      reRenderDom: function (e) {
+        var root = Polymer.dom(this.root).querySelector(e.detail.templateId);
+        if (root && root.render) {
+          root.render();
+        }
       }
     });
 </script>
